@@ -17,6 +17,8 @@ namespace sqlite;
 
 use core.os!;
 use core.json!;
+use core.string;
+use core.types;
 
 // ---------------------------------------------------------------
 // Public: build the DBI adapter hash for SQLite.
@@ -29,6 +31,7 @@ func adapter(options) = {
     disconnect: _disconnect,
     execute: _execute,
     query: _query,
+    query_meta: _query_meta,
     prepare: _prepare,
     execute_prepared: _execute_prepared,
     query_prepared: _query_prepared,
@@ -91,6 +94,90 @@ func _query(dbh, sql, params) = _rpc(dbh.proc, {op: "query", sql: sql, params: p
     success(r) => success(r.rows)
     failure(e) => failure(e)
 };
+
+// query_meta returns the full query result including schema metadata
+// (columns + column_types), so the DBI layer / callers can derive constraints.
+func _query_meta(dbh, sql, params) = _rpc(dbh.proc, {op: "query", sql: sql, params: params}) !? {
+    success(r) => success({columns: r.columns, column_types: r.column_types, rows: r.rows})
+    failure(e) => failure(e)
+};
+
+// ---------------------------------------------------------------------------
+// Constraint generation from schema metadata.
+//
+// SQLite queries report each result column's declared type; the adapter
+// surfaces them as `column_types`. These functions turn that type information
+// into per-column validator constraints. This mapping is SQLite-specific and
+// therefore lives in this DBD (driver) rather than in the generic DBI layer.
+// ---------------------------------------------------------------------------
+
+// schema(meta) -> hash: column name -> {dbtype, type_of, is}
+//   dbtype  : raw declared SQL type (e.g. "INTEGER")
+//   type_of : normalized calcium affinity label
+//   is      : validator function (value -> bool)
+// meta comes from dbi.query_meta(dbh, sql, params).
+func schema(meta) = _schema_build(meta.columns, meta.column_types, 0, {});
+
+func _schema_build(cols, types, i, acc) = match i >= len(cols)
+    true => acc
+    false => match i >= len(types)
+        true => _schema_build(cols, types, i + 1, _schema_put(acc, cols[i], "any"))
+        false => _schema_build(cols, types, i + 1, _schema_put(acc, cols[i], types[i]));
+
+func _schema_put(acc, col, t) = hash_set(acc, col, {
+    dbtype: t,
+    type_of: _affinity(t),
+    is: _is_of(_affinity(t))
+});
+
+func _is_of(a) = match a
+    "int" => types.is_int
+    "float" => types.is_float
+    "num" => types.is_number
+    "string" => types.is_string
+    "bool" => types.is_bool
+    true => _is_any;
+
+func _is_any(v) = true;
+
+// Map a declared SQLite column type to a normalized calcium affinity label.
+func _affinity(t) = match _has(t, "INT")
+    true => "int"
+    false => match _has(t, "REAL") || _has(t, "FLOA") || _has(t, "DOUB")
+        true => "float"
+        false => match _has(t, "BOOL")
+            true => "bool"
+            false => match _has(t, "NUM")
+                true => "num"
+                false => match _has(t, "BLOB") || _has(t, "BIN")
+                    true => "string"
+                    false => match _has(t, "CHAR") || _has(t, "TEXT") || _has(t, "CLOB")
+                        true => "string"
+                        false => "any";
+
+func _has(s, sub) = _has_upper(string.upper(s), sub);
+func _has_upper(us, sub) = string.contains(us, sub);
+
+// validate(schema, row) -> success(true) | failure("column ... violation")
+// Checks every column present in `row` against the schema validators.
+func validate(schema, row) = _validate_keys(schema, row, keys(row));
+
+func _validate_keys(schema, row, ks) = match len(ks)
+    0 => success(true)
+    true => _validate_key(schema, row, head(ks), tail(ks));
+
+func _validate_key(schema, row, col, rest) = _check(schema, row, col) !? {
+    success(_) => _validate_keys(schema, row, rest)
+    failure(e) => failure(e)
+};
+
+func _check(schema, row, col) = match !has(schema, col)
+    true => success(true)
+    false => _check_val(get(schema, col), get(row, col));
+
+func _check_val(c, val) = match c.is(val)
+    true => success(true)
+    false => failure(concat("column '", concat(to_string(c.dbtype), concat("' type violation for value ", to_string(val)))));
 
 func _prepare(dbh, sql) = _rpc(dbh.proc, {op: "prepare", sql: sql}) !? {
     success(r) => success({proc: dbh.proc, stmt: r.stmt})

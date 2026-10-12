@@ -207,6 +207,7 @@ func (b *backend) query(req map[string]interface{}, kind string) map[string]inte
 	defer rows.Close()
 
 	cols, _ := rows.Columns()
+	colTypes := columnTypes(rows)
 	all := []map[string]interface{}{}
 	for rows.Next() {
 		row := make([]interface{}, len(cols))
@@ -223,13 +224,13 @@ func (b *backend) query(req map[string]interface{}, kind string) map[string]inte
 		}
 		all = append(all, m)
 		if kind == "query_row" {
-			return okResp(map[string]interface{}{"row": all[0]})
+			return okResp(map[string]interface{}{"row": all[0], "column_types": colTypes})
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return errResp(err)
 	}
-	return okResp(map[string]interface{}{"columns": cols, "rows": all})
+	return okResp(map[string]interface{}{"columns": cols, "column_types": colTypes, "rows": all})
 }
 
 func (b *backend) prepare(req map[string]interface{}) map[string]interface{} {
@@ -297,6 +298,7 @@ func (b *backend) queryRows(stmt *sql.Stmt, params []interface{}) map[string]int
 	}
 	defer rows.Close()
 	cols, _ := rows.Columns()
+	colTypes := columnTypes(rows)
 	all := []map[string]interface{}{}
 	for rows.Next() {
 		row := make([]interface{}, len(cols))
@@ -316,7 +318,24 @@ func (b *backend) queryRows(stmt *sql.Stmt, params []interface{}) map[string]int
 	if err := rows.Err(); err != nil {
 		return errResp(err)
 	}
-	return okResp(map[string]interface{}{"columns": cols, "rows": all})
+	return okResp(map[string]interface{}{"columns": cols, "column_types": colTypes, "rows": all})
+}
+
+// columnTypes returns each column's declared SQL type name from the driver.
+func columnTypes(rows *sql.Rows) []string {
+	cts, err := rows.ColumnTypes()
+	if err != nil {
+		return nil
+	}
+	out := make([]string, len(cts))
+	for i, c := range cts {
+		name := c.DatabaseTypeName()
+		if name == "" && c.ScanType() != nil {
+			name = c.ScanType().Name()
+		}
+		out[i] = name
+	}
+	return out
 }
 
 func (b *backend) begin() map[string]interface{} {

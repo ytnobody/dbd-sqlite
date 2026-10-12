@@ -82,6 +82,30 @@ The integration test (`mod.test.ca`) runs the real backend through the adapter
 and covers DDL/DML, query, prepared statements, transactions (BEGIN/ROLLBACK/
 COMMIT), and error handling.
 
+# CONSTRAINT GENERATION FROM SCHEMA TYPES
+
+`dbi.query_meta(dbh, sql, params)` returns `{columns, column_types, rows}`.
+SQLite-specific type information is turned into per-column validators here in
+the DBD (driver), not in the generic DBI layer:
+
+```calcium
+meta = dbi.query_meta(dbh, "SELECT id, name, age FROM users", []) !? {
+    success(v) => v failure(e) => {}
+};
+
+sc = sqlite.schema(meta);       // { age: {dbtype:.., type_of:.., is: <fn>}, ... }
+
+sqlite.validate(sc, {id: 1, name: "alice", age: 30}) !? {
+    success(_) => io.println("row ok")
+    failure(e) => io.println(e)   // column 'INTEGER' type violation for value ...
+};
+```
+
+`schema(meta)` maps each column to `{dbtype, type_of, is}` where `is` is a
+validator function (`value -> bool`). Type mapping follows SQLite affinity
+(`INTEGER`->int, `REAL/FLOAT/DOUBLE`->float, `BOOL`->bool, `TEXT/CHAR/CLOB`->
+string, `NUMERIC`->number, `BLOB`->string).
+
 # NOTES
 
 - The backend keeps a single underlying SQLite connection so SQL-level
