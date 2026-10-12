@@ -104,7 +104,12 @@ sqlite.validate(sc, {id: 1, name: "alice", age: 30}) !? {
 `schema(meta)` maps each column to `{dbtype, type_of, is}` where `is` is a
 validator function (`value -> bool`). Type mapping follows SQLite affinity
 (`INTEGER`->int, `REAL/FLOAT/DOUBLE`->float, `BOOL`->bool, `TEXT/CHAR/CLOB`->
-string, `NUMERIC`->number, `BLOB`->string).
+string, `NUMERIC`->number, `BLOB`->string) and also recognises the Go
+reflection names the driver reports for expressions / untyped columns
+(`int64`, `float64`, `string`, `bool`, `[]uint8`). There is **no permissive
+"any" constraint**: an unknown / untyped column is `type_of: "unknown"` and
+its validator rejects (fail-closed), so unverifiable columns are surfaced
+rather than silently accepted.
 
 # NOTES
 

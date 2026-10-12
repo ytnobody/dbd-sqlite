@@ -112,10 +112,12 @@ func _query_meta(dbh, sql, params) = _rpc(dbh.proc, {op: "query", sql: sql, para
 // ---------------------------------------------------------------------------
 
 // schema(meta) -> hash: column name -> {dbtype, type_of, is}
-//   dbtype  : raw declared SQL type (e.g. "INTEGER")
-//   type_of : normalized calcium affinity label
+//   dbtype  : raw declared type (e.g. "INTEGER", or Go "int64" for expressions)
+//   type_of : normalized affinity label (int/float/num/string/bool/unknown)
 //   is      : validator function (value -> bool)
-// meta comes from dbi.query_meta(dbh, sql, params).
+// meta comes from dbi.query_meta(dbh, sql, params). An unknown/untyped column
+// is type_of "unknown" and its validator rejects (fail-closed); there is no
+// permissive "any" constraint.
 func schema(meta) = _schema_build(meta.columns, meta.column_types, 0, {});
 
 func _schema_build(cols, types, i, acc) = match i >= len(cols)
@@ -136,25 +138,33 @@ func _is_of(a) = match a
     "num" => types.is_number
     "string" => types.is_string
     "bool" => types.is_bool
-    true => _is_any;
+    true => _reject;
 
-func _is_any(v) = true;
+// Unknown / untyped columns are NOT silently accepted: validation fails-closed.
+func _reject(v) = false;
 
-// Map a declared SQLite column type to a normalized calcium affinity label.
-func _affinity(t) = match _has(t, "INT")
-    true => "int"
-    false => match _has(t, "REAL") || _has(t, "FLOA") || _has(t, "DOUB")
-        true => "float"
-        false => match _has(t, "BOOL")
-            true => "bool"
-            false => match _has(t, "NUM")
-                true => "num"
-                false => match _has(t, "BLOB") || _has(t, "BIN")
-                    true => "string"
-                    false => match _has(t, "CHAR") || _has(t, "TEXT") || _has(t, "CLOB")
+// Map a declared column type to a normalized affinity label. Handles both
+// SQLite declared types (INTEGER, REAL, TEXT, BLOB, NUMERIC, BOOL) and the Go
+// reflection names the driver reports for expressions / untyped columns
+// (int64, float64, string, bool, []uint8). An empty / unrecognized type maps
+// to "unknown", which rejects rather than accepting anything.
+func _affinity(t) = match _is_blank(t)
+    true => "unknown"
+    false => match _has(t, "INT")
+        true => "int"
+        false => match _has(t, "FLOA") || _has(t, "DOUB") || _has(t, "REAL")
+            true => "float"
+            false => match _has(t, "BOOL")
+                true => "bool"
+                false => match _has(t, "NUM")
+                    true => "num"
+                    false => match _has(t, "CHAR") || _has(t, "TEXT") || _has(t, "CLOB") || _has(t, "STR")
                         true => "string"
-                        false => "any";
+                        false => match _has(t, "BLOB") || _has(t, "BIN") || _has(t, "BYT") || _has(t, "UINT")
+                            true => "string"
+                            false => "unknown";
 
+func _is_blank(t) = string.is_empty(string.trim(t));
 func _has(s, sub) = _has_upper(string.upper(s), sub);
 func _has_upper(us, sub) = string.contains(us, sub);
 
