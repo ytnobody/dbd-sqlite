@@ -109,6 +109,19 @@ r_cons !? {
     success(_) => 0
     failure(e)  => assert.is_true("constraint error is not a syntax error", _fails(e |> sqlite.SyntaxError?))
 };
+// umbrella: any specific error also satisfies sqlite.DbError (subtype-style)
+r_cons !? {
+    success(_) => 0
+    failure(e)  => assert.succeeds("constraint error matches sqlite.DbError", e |> sqlite.DbError?)
+};
+r_nf !? {
+    success(_) => 0
+    failure(e)  => assert.succeeds("not_found error matches sqlite.DbError", e |> sqlite.DbError?)
+};
+r_syn !? {
+    success(_) => 0
+    failure(e)  => assert.succeeds("syntax error matches sqlite.DbError", e |> sqlite.DbError?)
+};
 
 // ------------------------------------------------------------
 assert.section("disconnect");

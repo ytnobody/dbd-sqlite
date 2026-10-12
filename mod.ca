@@ -52,6 +52,21 @@ constraint BusyError(e) = _is_variant(e, "busy");
 constraint ProtocolError(e) = _is_variant(e, "protocol");
 constraint UnknownError(e) = _is_variant(e, "unknown");
 
+// Umbrella constraint: holds for ANY DbError variant. This is the
+// "subtype-style" relation expressed by composing the specific constraints
+// (no ADT inheritance): a ConstraintErr satisfies both sqlite.DbError? and
+// sqlite.ConstraintError?.
+constraint DbError(e) =
+    ConnectionError(e) ||
+    ConstraintError(e) ||
+    SyntaxError(e) ||
+    NotFoundError(e) ||
+    TypeError(e) ||
+    IOError(e) ||
+    BusyError(e) ||
+    ProtocolError(e) ||
+    UnknownError(e);
+
 func _is_variant(e, kind) = match e
     ConnectionErr(m) => kind == "connection"
     ConstraintErr(m) => kind == "constraint"

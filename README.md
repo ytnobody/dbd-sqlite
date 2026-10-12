@@ -138,6 +138,11 @@ Available constraints (each maps to a `DbError` variant):
 | `sqlite.BusyError` | `BusyErr(msg)` |
 | `sqlite.ProtocolError` | `ProtocolErr(msg)` |
 | `sqlite.UnknownError` | `UnknownErr(msg)` |
+| `sqlite.DbError` (umbrella) | any of the above |
+
+`sqlite.DbError` composes the specific constraints, so a value can satisfy both
+the umbrella and a specific error (e.g. a `ConstraintErr` matches both
+`sqlite.DbError?` and `sqlite.ConstraintError?`).
 
 `query_row` with no matching row is **not an error**: it returns
 `success(null)`.
