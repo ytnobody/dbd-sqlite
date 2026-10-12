@@ -116,14 +116,13 @@ func _query_meta(dbh, sql, params) = _rpc(dbh.proc, {op: "query", sql: sql, para
 //   type_of : normalized affinity label (int/float/num/string/bool/unknown)
 //   is      : validator function (value -> bool)
 // meta comes from dbi.query_meta(dbh, sql, params). An unknown/untyped column
-// falls back to the loosest concrete type (string); there is no permissive
-// "any" (accept everything) constraint.
+// falls back to the loosest concrete type (string).
 func schema(meta) = _schema_build(meta.columns, meta.column_types, 0, {});
 
 func _schema_build(cols, types, i, acc) = match i >= len(cols)
     true => acc
     false => match i >= len(types)
-        true => _schema_build(cols, types, i + 1, _schema_put(acc, cols[i], "any"))
+        true => _schema_build(cols, types, i + 1, _schema_put(acc, cols[i], ""))
         false => _schema_build(cols, types, i + 1, _schema_put(acc, cols[i], types[i]));
 
 func _schema_put(acc, col, t) = hash_set(acc, col, {
@@ -144,8 +143,7 @@ func _is_of(a) = match a
 // SQLite declared types (INTEGER, REAL, TEXT, BLOB, NUMERIC, BOOL) and the Go
 // reflection names the driver reports for expressions / untyped columns
 // (int64, float64, string, bool, []uint8). An empty / unrecognized type falls
-// back to the loosest concrete type, **string** -- never a permissive "any"
-// (accept everything) and never a reject.
+// back to the loosest concrete type, string.
 func _affinity(t) = match _has(t, "INT")
     true => "int"
     false => match _has(t, "FLOA") || _has(t, "DOUB") || _has(t, "REAL")

@@ -106,10 +106,8 @@ validator function (`value -> bool`). Type mapping follows SQLite affinity
 (`INTEGER`->int, `REAL/FLOAT/DOUBLE`->float, `BOOL`->bool, `TEXT/CHAR/CLOB`->
 string, `NUMERIC`->number, `BLOB`->string) and also recognises the Go
 reflection names the driver reports for expressions / untyped columns
-(`int64`, `float64`, `string`, `bool`, `[]uint8`). There is **no permissive
-"any" (accept-everything) constraint**: an unknown / untyped column falls
-back to the loosest concrete type -- `string` -- so the validation never
-accepts anything nor rejects everything.
+(`int64`, `float64`, `string`, `bool`, `[]uint8`). An unknown / untyped column
+falls back to the loosest concrete type -- `string`.
 
 # NOTES
 
