@@ -20,6 +20,65 @@ use core.json!;
 use core.string;
 use core.types;
 
+// ---------------------------------------------------------------------------
+// Error types
+//
+// SQLite/driver failures are returned as a DbError value (not a bare string),
+// so error kinds can be checked with constraints:
+//
+//   r !? { success(v) => ...  failure(e) => e |> sqlite.ConnectionError? }
+//
+// Each variant is also exposed via a matching `sqlite.<Name>` constraint.
+// ---------------------------------------------------------------------------
+
+type DbError =
+    ConnectionErr(msg) |
+    ConstraintErr(msg) |
+    SyntaxErr(msg) |
+    NotFoundErr(msg) |
+    TypeErr(msg) |
+    IOErr(msg) |
+    BusyErr(msg) |
+    ProtocolErr(msg) |
+    EmptyResponseErr(msg) |
+    UnknownErr(msg);
+
+constraint ConnectionError(e) = _is_variant(e, "connection");
+constraint ConstraintError(e) = _is_variant(e, "constraint");
+constraint SyntaxError(e) = _is_variant(e, "syntax");
+constraint NotFoundError(e) = _is_variant(e, "not_found");
+constraint TypeError(e) = _is_variant(e, "type");
+constraint IOError(e) = _is_variant(e, "io");
+constraint BusyError(e) = _is_variant(e, "busy");
+constraint ProtocolError(e) = _is_variant(e, "protocol");
+constraint EmptyResponse(e) = _is_variant(e, "empty");
+constraint UnknownError(e) = _is_variant(e, "unknown");
+
+func _is_variant(e, kind) = match e
+    ConnectionErr(m) => kind == "connection"
+    ConstraintErr(m) => kind == "constraint"
+    SyntaxErr(m) => kind == "syntax"
+    NotFoundErr(m) => kind == "not_found"
+    TypeErr(m) => kind == "type"
+    IOErr(m) => kind == "io"
+    BusyErr(m) => kind == "busy"
+    ProtocolErr(m) => kind == "protocol"
+    EmptyResponseErr(m) => kind == "empty"
+    UnknownErr(m) => kind == "unknown";
+
+// Map a protocol error code to the corresponding DbError variant.
+func _err(code, msg) = match code
+    "connection" => ConnectionErr(msg)
+    "constraint" => ConstraintErr(msg)
+    "syntax" => SyntaxErr(msg)
+    "not_found" => NotFoundErr(msg)
+    "type" => TypeErr(msg)
+    "io" => IOErr(msg)
+    "busy" => BusyErr(msg)
+    "protocol" => ProtocolErr(msg)
+    "empty" => EmptyResponseErr(msg)
+    true => UnknownErr(msg);
+
 // ---------------------------------------------------------------
 // Public: build the DBI adapter hash for SQLite.
 // options.backend overrides the backend executable (default "dbd-sqlite");
@@ -32,6 +91,7 @@ func adapter(options) = {
     execute: _execute,
     query: _query,
     query_meta: _query_meta,
+    query_row: _query_row,
     prepare: _prepare,
     execute_prepared: _execute_prepared,
     query_prepared: _query_prepared,
@@ -50,27 +110,27 @@ func _rpc(proc, req) = _rpc_encoded(proc, req, json.stringify(req));
 
 func _rpc_encoded(proc, req, encoded) = encoded !? {
     success(s) => _rpc_send(proc, s)
-    failure(e) => failure(e)
+    failure(e) => failure(ProtocolErr(e))
 };
 
 func _rpc_send(proc, s) = os.proc_write(proc, concat(s, "\n")) !? {
     success(_) => _rpc_read(proc)
-    failure(e) => failure(e)
+    failure(e) => failure(ProtocolErr(e))
 };
 
 func _rpc_read(proc) = os.proc_read_line(proc) !? {
     success(line) => _rpc_parse(proc, line)
-    failure(e) => failure(e)
+    failure(e) => failure(ProtocolErr(e))
 };
 
 func _rpc_parse(proc, line) = json.parse(line) !? {
     success(v) => _rpc_result(v)
-    failure(e) => failure(e)
+    failure(e) => failure(ProtocolErr(e))
 };
 
 func _rpc_result(v) = match v.ok
     true => success(v)
-    false => failure(v.error);
+    false => failure(_err(v.code, v.error));
 
 // ---------------------------------------------------------------
 // DBI adapter contract implementation
@@ -80,7 +140,7 @@ func _connect(dsn, options) = _launch(_backend_name(options), dsn);
 
 func _launch(backend, dsn) = os.proc_start(backend, [dsn]) !? {
     success(proc) => success({driver: "sqlite", proc: proc})
-    failure(e) => failure(concat("dbd-sqlite: could not start backend '", concat(backend, concat("': ", e))))
+    failure(e) => failure(ConnectionErr(concat("could not start backend '", concat(backend, concat("': ", e)))))
 };
 
 func _disconnect(dbh) = os.proc_close(dbh.proc);
@@ -99,6 +159,12 @@ func _query(dbh, sql, params) = _rpc(dbh.proc, {op: "query", sql: sql, params: p
 // (columns + column_types), so the DBI layer / callers can derive constraints.
 func _query_meta(dbh, sql, params) = _rpc(dbh.proc, {op: "query", sql: sql, params: params}) !? {
     success(r) => success({columns: r.columns, column_types: r.column_types, rows: r.rows})
+    failure(e) => failure(e)
+};
+
+// query_row returns the first row, or failure(EmptyResponseErr) when empty.
+func _query_row(dbh, sql, params) = _rpc(dbh.proc, {op: "query_row", sql: sql, params: params}) !? {
+    success(r) => success(r.row)
     failure(e) => failure(e)
 };
 

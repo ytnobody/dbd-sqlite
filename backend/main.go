@@ -21,6 +21,7 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+	sqlite "modernc.org/sqlite"
 )
 
 type backend struct {
@@ -100,6 +101,7 @@ func respond(m map[string]interface{}, errMsg string) {
 	switch {
 	case errMsg != "":
 		m["ok"] = false
+		m["code"] = "connection"
 		m["error"] = errMsg
 	default:
 		m["ok"] = true
@@ -109,7 +111,57 @@ func respond(m map[string]interface{}, errMsg string) {
 }
 
 func errResp(err error) map[string]interface{} {
-	return map[string]interface{}{"ok": false, "error": err.Error()}
+	return map[string]interface{}{"ok": false, "code": classifyError(err), "error": err.Error()}
+}
+
+// codedResp builds an error response with an explicit code (for driver-level
+// conditions that are not SQLite result codes).
+func codedResp(code, msg string) map[string]interface{} {
+	return map[string]interface{}{"ok": false, "code": code, "error": msg}
+}
+
+// classifyError maps a driver error to a stable code string understood by the
+// DBI layer (see protocol.md). Primary SQLite result codes are used where
+// available; message inspection refines ambiguous SQLITE_ERROR cases.
+func classifyError(err error) string {
+	var se *sqlite.Error
+	if errors.As(err, &se) {
+		switch se.Code() & 0xff {
+		case 19:
+			return "constraint"
+		case 12:
+			return "not_found"
+		case 10:
+			return "io"
+		case 14:
+			return "connection"
+		case 20:
+			return "type"
+		case 5:
+			return "busy"
+		case 8:
+			return "readonly"
+		case 11:
+			return "corrupt"
+		case 13:
+			return "full"
+		case 1:
+			return classifySQLLogic(err.Error())
+		}
+	}
+	return classifySQLLogic(err.Error())
+}
+
+func classifySQLLogic(msg string) string {
+	m := strings.ToLower(msg)
+	switch {
+	case strings.Contains(m, "syntax"):
+		return "syntax"
+	case strings.Contains(m, "no such table"), strings.Contains(m, "no such column"), strings.Contains(m, "no such function"):
+		return "not_found"
+	default:
+		return "error"
+	}
 }
 
 func okResp(extra map[string]interface{}) map[string]interface{} {
@@ -150,7 +202,7 @@ func (b *backend) handle(op string, req map[string]interface{}) map[string]inter
 		os.Exit(0)
 		return nil
 	default:
-		return map[string]interface{}{"ok": false, "error": fmt.Sprintf("dbd-sqlite: unknown op %q", op)}
+		return codedResp("protocol", fmt.Sprintf("dbd-sqlite: unknown op %q", op))
 	}
 }
 
@@ -161,6 +213,9 @@ func (b *backend) sqlParams(v interface{}) ([]interface{}, error) {
 	}
 	return arr, nil
 }
+
+// (param validation errors surface as code "unknown" via errResp, which is
+// acceptable for caller errors.)
 
 func (b *backend) exec(req map[string]interface{}, kind string) map[string]interface{} {
 	sqlStr, ok := req["sql"].(string)
@@ -229,6 +284,9 @@ func (b *backend) query(req map[string]interface{}, kind string) map[string]inte
 	}
 	if err := rows.Err(); err != nil {
 		return errResp(err)
+	}
+	if kind == "query_row" {
+		return codedResp("empty", "no rows returned")
 	}
 	return okResp(map[string]interface{}{"columns": cols, "column_types": colTypes, "rows": all})
 }

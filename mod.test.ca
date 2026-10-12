@@ -77,6 +77,33 @@ assert.section("errors");
 r_err = adapter.query(dbh, "SELECT * FROM missing_table", []);
 assert.is_true("query error is failure", _fails(r_err));
 
+// typed error constraints
+r_cons = adapter.execute(dbh, "INSERT INTO users(id, name) VALUES (1, 'dup')", []);
+r_cons !? {
+    success(_) => assert.fail("expected constraint failure")
+    failure(e)  => assert.succeeds("constraint error matches sqlite.ConstraintError", e |> sqlite.ConstraintError?)
+};
+r_nf = adapter.query(dbh, "SELECT * FROM missing_table", []);
+r_nf !? {
+    success(_) => assert.fail("expected not_found failure")
+    failure(e)  => assert.succeeds("matches sqlite.NotFoundError", e |> sqlite.NotFoundError?)
+};
+r_syn = adapter.execute(dbh, "SELCT bad", []);
+r_syn !? {
+    success(_) => assert.fail("expected syntax failure")
+    failure(e)  => assert.succeeds("matches sqlite.SyntaxError", e |> sqlite.SyntaxError?)
+};
+r_empty = adapter.query_row(dbh, "SELECT * FROM users WHERE id=999999", []);
+r_empty !? {
+    success(_) => assert.fail("expected empty failure")
+    failure(e)  => assert.succeeds("matches sqlite.EmptyResponse", e |> sqlite.EmptyResponse?)
+};
+// cross-check: a constraint error must not match syntax
+r_cons !? {
+    success(_) => 0
+    failure(e)  => assert.is_true("constraint error is not a syntax error", _fails(e |> sqlite.SyntaxError?))
+};
+
 // ------------------------------------------------------------
 assert.section("disconnect");
 r_disc = adapter.disconnect(dbh);

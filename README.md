@@ -109,6 +109,40 @@ reflection names the driver reports for expressions / untyped columns
 (`int64`, `float64`, `string`, `bool`, `[]uint8`). An unknown / untyped column
 falls back to the loosest concrete type -- `string`.
 
+# ERROR TYPES / CONSTRAINTS
+
+Failures are returned as a typed `DbError` value (not a bare string), so error
+kinds can be checked with the `?` constraint syntax:
+
+```calcium
+r = dbi.execute(dbh, "INSERT INTO users(name) VALUES (NULL)", []);
+r !? {
+    success(_) => io.println("ok")
+    failure(e)  => e |> sqlite.ConstraintError? !? {
+        success(_) => io.println("constraint violation")
+        failure(_) => io.println(to_string(e))
+    }
+};
+```
+
+Available constraints (each maps to a `DbError` variant):
+
+| Constraint | Variant |
+|------------|---------|
+| `sqlite.ConnectionError` | `ConnectionErr(msg)` |
+| `sqlite.ConstraintError` | `ConstraintErr(msg)` |
+| `sqlite.SyntaxError` | `SyntaxErr(msg)` |
+| `sqlite.NotFoundError` | `NotFoundErr(msg)` |
+| `sqlite.TypeError` | `TypeErr(msg)` |
+| `sqlite.IOError` | `IOErr(msg)` |
+| `sqlite.BusyError` | `BusyErr(msg)` |
+| `sqlite.ProtocolError` | `ProtocolErr(msg)` |
+| `sqlite.EmptyResponse` | `EmptyResponseErr(msg)` |
+| `sqlite.UnknownError` | `UnknownErr(msg)` |
+
+Error kinds come from the backend's structured `code` (SQLite result codes +
+message refinement); see `protocol.md` in `calcium-dbi`.
+
 # NOTES
 
 - The backend keeps a single underlying SQLite connection so SQL-level
