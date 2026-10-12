@@ -137,8 +137,10 @@ Available constraints (each maps to a `DbError` variant):
 | `sqlite.IOError` | `IOErr(msg)` |
 | `sqlite.BusyError` | `BusyErr(msg)` |
 | `sqlite.ProtocolError` | `ProtocolErr(msg)` |
-| `sqlite.EmptyResponse` | `EmptyResponseErr(msg)` |
 | `sqlite.UnknownError` | `UnknownErr(msg)` |
+
+`query_row` with no matching row is **not an error**: it returns
+`success(null)`.
 
 Error kinds come from the backend's structured `code` (SQLite result codes +
 message refinement); see `protocol.md` in `calcium-dbi`.

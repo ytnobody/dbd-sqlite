@@ -286,7 +286,8 @@ func (b *backend) query(req map[string]interface{}, kind string) map[string]inte
 		return errResp(err)
 	}
 	if kind == "query_row" {
-		return codedResp("empty", "no rows returned")
+		// No matching row is a normal empty result, not an error.
+		return okResp(map[string]interface{}{"row": nil})
 	}
 	return okResp(map[string]interface{}{"columns": cols, "column_types": colTypes, "rows": all})
 }

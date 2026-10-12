@@ -40,7 +40,6 @@ type DbError =
     IOErr(msg) |
     BusyErr(msg) |
     ProtocolErr(msg) |
-    EmptyResponseErr(msg) |
     UnknownErr(msg);
 
 constraint ConnectionError(e) = _is_variant(e, "connection");
@@ -51,7 +50,6 @@ constraint TypeError(e) = _is_variant(e, "type");
 constraint IOError(e) = _is_variant(e, "io");
 constraint BusyError(e) = _is_variant(e, "busy");
 constraint ProtocolError(e) = _is_variant(e, "protocol");
-constraint EmptyResponse(e) = _is_variant(e, "empty");
 constraint UnknownError(e) = _is_variant(e, "unknown");
 
 func _is_variant(e, kind) = match e
@@ -63,7 +61,6 @@ func _is_variant(e, kind) = match e
     IOErr(m) => kind == "io"
     BusyErr(m) => kind == "busy"
     ProtocolErr(m) => kind == "protocol"
-    EmptyResponseErr(m) => kind == "empty"
     UnknownErr(m) => kind == "unknown";
 
 // Map a protocol error code to the corresponding DbError variant.
@@ -76,7 +73,6 @@ func _err(code, msg) = match code
     "io" => IOErr(msg)
     "busy" => BusyErr(msg)
     "protocol" => ProtocolErr(msg)
-    "empty" => EmptyResponseErr(msg)
     true => UnknownErr(msg);
 
 // ---------------------------------------------------------------
@@ -162,7 +158,7 @@ func _query_meta(dbh, sql, params) = _rpc(dbh.proc, {op: "query", sql: sql, para
     failure(e) => failure(e)
 };
 
-// query_row returns the first row, or failure(EmptyResponseErr) when empty.
+// query_row returns the first row, or success(null) when there is no row.
 func _query_row(dbh, sql, params) = _rpc(dbh.proc, {op: "query_row", sql: sql, params: params}) !? {
     success(r) => success(r.row)
     failure(e) => failure(e)
