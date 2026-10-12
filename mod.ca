@@ -1,0 +1,114 @@
+// dbd-sqlite - SQLite driver backend adapter for the DBI interface
+// Author: YTNOBODY
+// License: MIT
+//
+// This module builds a driver ADAPTER conforming to the `calcium-dbi` adapter
+// contract. It lauches the `dbd-sqlite` backend process (a separate Go binary
+// that embeds SQLite via modernc.org/sqlite) and talks to it over the DBI
+// text-stream protocol (line-delimited JSON on stdio) using core.os.proc_*.
+//
+// Usage:
+//   use dbi;          // calcium-dbi (pure-Calcium DBI interface)
+//   use dbd_sqlite;   // this driver backend adapter
+//   adapter = dbd_sqlite.adapter({backend: "dbd-sqlite"});
+//   dbh = dbi.connect(adapter, "app.db", {}) !? { ... };
+
+namespace dbd_sqlite;
+
+use core.os!;
+use core.json!;
+
+// ---------------------------------------------------------------
+// Public: build the DBI adapter hash for SQLite.
+// options.backend overrides the backend executable (default "dbd-sqlite");
+// options.dsn_prefix is prepended to the dsn passed to the backend.
+// ---------------------------------------------------------------
+func adapter(options) = {
+    name: "sqlite",
+    connect: _connect,
+    disconnect: _disconnect,
+    execute: _execute,
+    query: _query,
+    prepare: _prepare,
+    execute_prepared: _execute_prepared,
+    query_prepared: _query_prepared,
+    finish: _finish
+};
+
+func _backend_name(options) = match has(options, "backend")
+    true => options.backend
+    false => "dbd-sqlite";
+
+// ---------------------------------------------------------------
+// RPC: send a request hash to the backend and read its response.
+// ---------------------------------------------------------------
+
+func _rpc(proc, req) = _rpc_encoded(proc, req, json.stringify(req));
+
+func _rpc_encoded(proc, req, encoded) = encoded !? {
+    success(s) => _rpc_send(proc, s)
+    failure(e) => failure(e)
+};
+
+func _rpc_send(proc, s) = os.proc_write(proc, concat(s, "\n")) !? {
+    success(_) => _rpc_read(proc)
+    failure(e) => failure(e)
+};
+
+func _rpc_read(proc) = os.proc_read_line(proc) !? {
+    success(line) => _rpc_parse(proc, line)
+    failure(e) => failure(e)
+};
+
+func _rpc_parse(proc, line) = json.parse(line) !? {
+    success(v) => _rpc_result(v)
+    failure(e) => failure(e)
+};
+
+func _rpc_result(v) = match v.ok
+    true => success(v)
+    false => failure(v.error);
+
+// ---------------------------------------------------------------
+// DBI adapter contract implementation
+// ---------------------------------------------------------------
+
+func _connect(dsn, options) = _launch(_backend_name(options), dsn);
+
+func _launch(backend, dsn) = os.proc_start(backend, [dsn]) !? {
+    success(proc) => success({driver: "sqlite", proc: proc})
+    failure(e) => failure(concat("dbd-sqlite: could not start backend '", concat(backend, concat("': ", e))))
+};
+
+func _disconnect(dbh) = os.proc_close(dbh.proc);
+
+func _execute(dbh, sql, params) = _rpc(dbh.proc, {op: "execute", sql: sql, params: params}) !? {
+    success(r) => success(r.rows_affected)
+    failure(e) => failure(e)
+};
+
+func _query(dbh, sql, params) = _rpc(dbh.proc, {op: "query", sql: sql, params: params}) !? {
+    success(r) => success(r.rows)
+    failure(e) => failure(e)
+};
+
+func _prepare(dbh, sql) = _rpc(dbh.proc, {op: "prepare", sql: sql}) !? {
+    success(r) => success({proc: dbh.proc, stmt: r.stmt})
+    failure(e) => failure(e)
+};
+
+func _execute_prepared(stmt, params) = _rpc(stmt.proc, {op: "execute_prepared", stmt: stmt.stmt, params: params}) !? {
+    success(r) => success(r.rows_affected)
+    failure(e) => failure(e)
+};
+
+func _query_prepared(stmt, params) = _rpc(stmt.proc, {op: "query_prepared", stmt: stmt.stmt, params: params}) !? {
+    success(r) => success(r.rows)
+    failure(e) => failure(e)
+};
+
+func _finish(stmt) = _rpc(stmt.proc, {op: "finish", stmt: stmt.stmt}) !? {
+    success(_) => success(true)
+    failure(e) => failure(e)
+};
+

@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build Calcium
+        run: |
+          git clone --depth 1 https://github.com/ytnobody/calcium-lang.git /tmp/calcium-lang
+          cd /tmp/calcium-lang
+          go build -o /usr/local/bin/calcium ./cmd/calcium
+
+      - name: Build dbd-sqlite backend
+        run: |
+          cd backend
+          go build -o /tmp/dbd-sqlite .
+
+      - name: Setup module symlink
+        run: |
+          mkdir -p dbd_sqlite
+          ln -sf ../mod.ca dbd_sqlite/mod.ca
+
+      - name: Lint Calcium sources
+        run: |
+          calcium lint mod.ca
+          calcium lint mod.test.ca
+
+      - name: Vet backend
+        run: cd backend && go vet ./...
+
+      - name: Run tests
+        run: calcium mod.test.ca

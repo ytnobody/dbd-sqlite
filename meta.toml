@@ -1,0 +1,12 @@
+name = "dbd_sqlite"
+author = "ytnobody"
+description = "SQLite driver adapter for the DBI interface (pure-Calcium protocol adapter + Go backend)"
+license = "MIT"
+keywords = ["database", "sqlite", "dbd", "driver", "sql"]
+entry = "mod.ca"
+
+# Dependencies - only external modules need to be listed here
+# Core modules (core.*) are part of stdlib and don't need to be declared
+#
+# [dependencies]
+# "ytnobody/dbi" = "^1.0.0"

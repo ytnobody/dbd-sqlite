@@ -1,0 +1,85 @@
+// dbd-sqlite integration test (runs the real backend through the adapter).
+// Requires the `dbd-sqlite` backend on PATH, or set options.backend below.
+use core.io!;
+use core.assert!;
+use core.types;
+use dbd_sqlite;
+
+io.println("dbd-sqlite Adapter Test Suite");
+io.println("==============================");
+
+// Backend executable. In CI this is built and placed on PATH.
+backend = "/tmp/dbd-sqlite";
+dbFile = "/tmp/dbd_calcium_test.db";
+
+io.delete_file(dbFile);
+
+func _ok(r) = r !? {
+    success(v) => v
+    failure(_) => "__ERR__"
+};
+
+func _fails(r) = types.type_of(r) == "failure";
+
+adapter = dbd_sqlite.adapter({backend: backend});
+
+// ------------------------------------------------------------
+assert.section("connect");
+dbh = _ok(adapter.connect(dbFile, {backend: backend}));
+assert.not_null("connect returns handle", dbh);
+
+// ------------------------------------------------------------
+assert.section("execute / DDL / DML");
+r_create = adapter.execute(dbh, "CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, name TEXT)", []);
+assert.succeeds("create table", r_create);
+r_ins1 = adapter.execute(dbh, "INSERT INTO users(name) VALUES (?)", ["alice"]);
+assert.eq("insert affected", _ok(r_ins1), 1);
+
+// ------------------------------------------------------------
+assert.section("query");
+r_sel = adapter.query(dbh, "SELECT id, name FROM users WHERE id = ?", [1]);
+rows = _ok(r_sel);
+assert.len_eq("query returns 1 row", rows, 1);
+assert.eq("row name", rows[0].name, "alice");
+assert.eq("row id", rows[0].id, 1);
+
+// ------------------------------------------------------------
+assert.section("prepared statements");
+stmt = _ok(adapter.prepare(dbh, "INSERT INTO users(name) VALUES (?)"));
+assert.not_null("prepare returns stmt", stmt);
+r_prep1 = adapter.execute_prepared(stmt, ["bob"]);
+assert.eq("prepared insert affected", _ok(r_prep1), 1);
+r_prep2 = adapter.execute_prepared(stmt, ["carol"]);
+assert.eq("second prepared insert affected", _ok(r_prep2), 1);
+r_fin = adapter.finish(stmt);
+assert.succeeds("finish statement", r_fin);
+
+// ------------------------------------------------------------
+assert.section("transactions via SQL");
+r_begin = adapter.execute(dbh, "BEGIN", []);
+assert.succeeds("begin", r_begin);
+r_tx = adapter.execute(dbh, "INSERT INTO users(name) VALUES (?)", ["temp"]);
+assert.eq("tx insert affected", _ok(r_tx), 1);
+r_roll = adapter.execute(dbh, "ROLLBACK", []);
+assert.succeeds("rollback", r_roll);
+r_cnt1 = adapter.query(dbh, "SELECT COUNT(*) AS n FROM users", []);
+assert.eq("count after rollback", _ok(r_cnt1)[0].n, 3);
+
+r_begin2 = adapter.execute(dbh, "BEGIN", []);
+r_tx2 = adapter.execute(dbh, "INSERT INTO users(name) VALUES (?)", ["zoe"]);
+r_comm = adapter.execute(dbh, "COMMIT", []);
+assert.succeeds("commit", r_comm);
+r_cnt2 = adapter.query(dbh, "SELECT COUNT(*) AS n FROM users", []);
+assert.eq("count after commit", _ok(r_cnt2)[0].n, 4);
+
+// ------------------------------------------------------------
+assert.section("errors");
+r_err = adapter.query(dbh, "SELECT * FROM missing_table", []);
+assert.is_true("query error is failure", _fails(r_err));
+
+// ------------------------------------------------------------
+assert.section("disconnect");
+r_disc = adapter.disconnect(dbh);
+assert.succeeds("disconnect", r_disc);
+
+io.println("All dbd-sqlite tests complete");

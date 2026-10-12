@@ -1,0 +1,9 @@
+# Local test symlink dir (created by CI / local testing)
+dbd_sqlite/
+
+# Locally built backend executable
+backend/dbd-sqlite
+
+# SQLite databases used during tests
+*.db
+*.db-journal
