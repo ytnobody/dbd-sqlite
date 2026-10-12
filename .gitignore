@@ -1,5 +1,5 @@
 # Local test symlink dir (created by CI / local testing)
-dbd_sqlite/
+dbd/
 
 # Locally built backend executable
 backend/dbd-sqlite

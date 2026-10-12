@@ -3,7 +3,7 @@
 use core.io!;
 use core.assert!;
 use core.types;
-use dbd_sqlite;
+use dbd.sqlite;
 
 io.println("dbd-sqlite Adapter Test Suite");
 io.println("==============================");
@@ -21,7 +21,7 @@ func _ok(r) = r !? {
 
 func _fails(r) = types.type_of(r) == "failure";
 
-adapter = dbd_sqlite.adapter({backend: backend});
+adapter = sqlite.adapter({backend: backend});
 
 // ------------------------------------------------------------
 assert.section("connect");

@@ -1,10 +1,10 @@
 # NAME
 
-dbd_sqlite - SQLite driver adapter for the Calcium DBI interface
+`dbd.sqlite` - SQLite driver adapter for the Calcium DBI interface
 
 # DESCRIPTION
 
-`dbd_sqlite` provides a **SQLite driver** for the [`calcium-dbi`] DBI interface.
+`dbd.sqlite` provides a **SQLite driver** for the [`calcium-dbi`] DBI interface.
 It pairs a tiny **Go backend** (`backend/`, embedding SQLite via
 `modernc.org/sqlite` -- pure Go, CGO-free) with a **pure-Calcium adapter**
 (`mod.ca`) that satisfies the `calcium-dbi` adapter contract.
@@ -37,10 +37,10 @@ go build -o dbd-sqlite .
 
 ```calcium
 use dbi;          // calcium-dbi (pure-Calcium interface)
-use dbd_sqlite;   // this SQLite adapter
+use dbd.sqlite;   // resolves dbd/sqlite -> sqlite.*
 use core.io!;
 
-adapter = dbd_sqlite.adapter({backend: "dbd-sqlite"});  // PATH lookup
+adapter = sqlite.adapter({backend: "dbd-sqlite"});  // PATH lookup
 
 dbh = dbi.connect(adapter, "app.db", {}) !? {
     success(v) => v
@@ -59,7 +59,7 @@ dbi.disconnect(dbh);
 
 # ADAPTER
 
-`dbd_sqlite.adapter(options)` returns a hash that can be passed to
+`sqlite.adapter(options)` returns a hash that can be passed to
 `dbi.connect`. It implements the `calcium-dbi` adapter contract.
 
 `options`:
@@ -74,7 +74,7 @@ A backend also exits on its own when its stdin reaches EOF.
 ```bash
 cd backend && go build -o /tmp/dbd-sqlite .
 cd ..
-mkdir -p dbd_sqlite && ln -sf ../mod.ca dbd_sqlite/mod.ca
+mkdir -p dbd/sqlite && ln -sf ../../mod.ca dbd/sqlite/mod.ca
 calcium mod.test.ca
 ```
 

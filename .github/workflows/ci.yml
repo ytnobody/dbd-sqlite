@@ -30,8 +30,8 @@ jobs:
 
       - name: Setup module symlink
         run: |
-          mkdir -p dbd_sqlite
-          ln -sf ../mod.ca dbd_sqlite/mod.ca
+          mkdir -p dbd/sqlite
+          ln -sf ../../mod.ca dbd/sqlite/mod.ca
 
       - name: Lint Calcium sources
         run: |

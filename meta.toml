@@ -1,6 +1,6 @@
-name = "dbd_sqlite"
+name = "dbd.sqlite"
 author = "ytnobody"
-description = "SQLite driver adapter for the DBI interface (pure-Calcium protocol adapter + Go backend)"
+description = "SQLite driver adapter for the dbi interface (pure-Calcium protocol adapter + Go backend)"
 license = "MIT"
 keywords = ["database", "sqlite", "dbd", "driver", "sql"]
 entry = "mod.ca"

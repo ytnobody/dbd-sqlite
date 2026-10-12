@@ -9,11 +9,11 @@
 //
 // Usage:
 //   use dbi;          // calcium-dbi (pure-Calcium DBI interface)
-//   use dbd_sqlite;   // this driver backend adapter
-//   adapter = dbd_sqlite.adapter({backend: "dbd-sqlite"});
+//   use dbd.sqlite;   // this driver backend adapter (dbd.sqlite -> sqlite.*)
+//   adapter = sqlite.adapter({backend: "dbd-sqlite"});
 //   dbh = dbi.connect(adapter, "app.db", {}) !? { ... };
 
-namespace dbd_sqlite;
+namespace sqlite;
 
 use core.os!;
 use core.json!;
