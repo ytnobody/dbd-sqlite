@@ -26,7 +26,7 @@ adapter = sqlite.adapter({backend: backend});
 // ------------------------------------------------------------
 assert.section("connect");
 dbh = _ok(adapter.connect(dbFile, {backend: backend}));
-assert.not_null("connect returns handle", dbh);
+assert.ok("connect returns handle", dbh);
 
 // ------------------------------------------------------------
 assert.section("execute / DDL / DML");
@@ -46,7 +46,7 @@ assert.eq("row id", rows[0].id, 1);
 // ------------------------------------------------------------
 assert.section("prepared statements");
 stmt = _ok(adapter.prepare(dbh, "INSERT INTO users(name) VALUES (?)"));
-assert.not_null("prepare returns stmt", stmt);
+assert.ok("prepare returns stmt", stmt);
 r_prep1 = adapter.execute_prepared(stmt, ["bob"]);
 assert.eq("prepared insert affected", _ok(r_prep1), 1);
 r_prep2 = adapter.execute_prepared(stmt, ["carol"]);
@@ -93,10 +93,10 @@ r_syn !? {
     success(_) => assert.fail("expected syntax failure")
     failure(e)  => assert.succeeds("matches sqlite.SyntaxError", e |> sqlite.SyntaxError?)
 };
-// an empty single-row result is normal: success(null), not an error
+// an empty single-row result is normal: success(Maybe.None), not an error
 r_empty = adapter.query_row(dbh, "SELECT * FROM users WHERE id=999999", []);
 r_empty !? {
-    success(v) => assert.is_null("empty query_row yields success(null)", v)
+    success(v) => assert.eq("empty query_row yields Maybe.None", v, Maybe.None)
     failure(_) => assert.fail("empty query_row should not be a failure")
 };
 r_row = adapter.query_row(dbh, "SELECT * FROM users WHERE id=1", []);

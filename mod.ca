@@ -173,7 +173,7 @@ func _query_meta(dbh, sql, params) = _rpc(dbh.proc, {op: "query", sql: sql, para
     failure(e) => failure(e)
 };
 
-// query_row returns the first row, or success(null) when there is no row.
+// query_row returns the first row, or success(Maybe.None) when there is no row.
 func _query_row(dbh, sql, params) = _rpc(dbh.proc, {op: "query_row", sql: sql, params: params}) !? {
     success(r) => success(r.row)
     failure(e) => failure(e)
@@ -244,7 +244,7 @@ func validate(schema, row) = _validate_keys(schema, row, keys(row));
 
 func _validate_keys(schema, row, ks) = match len(ks)
     0 => success(true)
-    true => _validate_key(schema, row, head(ks), tail(ks));
+    true => _validate_key(schema, row, ks[0], tail(ks));
 
 func _validate_key(schema, row, col, rest) = _check(schema, row, col) !? {
     success(_) => _validate_keys(schema, row, rest)
@@ -253,7 +253,7 @@ func _validate_key(schema, row, col, rest) = _check(schema, row, col) !? {
 
 func _check(schema, row, col) = match !has(schema, col)
     true => success(true)
-    false => _check_val(get(schema, col), get(row, col));
+    false => _check_val(schema[col], row[col]);
 
 func _check_val(c, val) = match c.is(val)
     true => success(true)

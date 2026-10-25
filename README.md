@@ -145,7 +145,7 @@ the umbrella and a specific error (e.g. a `ConstraintErr` matches both
 `sqlite.DbError?` and `sqlite.ConstraintError?`).
 
 `query_row` with no matching row is **not an error**: it returns
-`success(null)`.
+`success(Maybe.None)`.
 
 Error kinds come from the backend's structured `code` (SQLite result codes +
 message refinement); see `protocol.md` in `calcium-dbi`.
